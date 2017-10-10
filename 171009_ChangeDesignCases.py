@@ -14,18 +14,18 @@ overwrite = True
 
 ## excel file variables
 excel_file = "SimpleParameters.xlsx"
-excel_path = "C:\\Users\\mujakob\\Box Sync\\MEPHISTO\\EWB_test\\TESTING"
+excel_path = "C:\\Users\\mujakob\\Box Sync\\MEPHISTO\\EWB_test\\TESTING\\CODING"
 excel_fullpath = os.path.join(excel_path, excel_file)
 excel_sheet_name = "Sheet1"
 design_case_indicator_column='DC' # name (word in row one) of the column containig the design case identifier
 
 ## NX file variables
 master_cad_file = "MikroTRS.prt"
-master_cad_path = "C:\\Users\\mujakob\\Box Sync\\MEPHISTO\\EWB_test\\TESTING"
+master_cad_path = "C:\\Users\\mujakob\\Box Sync\\MEPHISTO\\EWB_test\\TESTING\\CODING"
 master_cad_fullpath = os.path.join(master_cad_path, master_cad_file)
 
 #NX output
-final_path = "C:\\Users\\mujakob\\Box Sync\\MEPHISTO\\EWB_test\\TESTING\\Results1"
+final_path = "C:\\Users\\mujakob\\Box Sync\\MEPHISTO\\EWB_test\\Results1"
 final_name = "SimpleTRS"
 #NX globals
 theSession  = NXOpen.Session.GetSession()
@@ -85,7 +85,7 @@ def overwriteFileOrRename(file):
             f_count += 1
             f_name = f_name + "_" + str(f_count)
         else:
-            f_name = f_name.rstrip("0123456789") + f_count
+            f_name = f_name.rstrip("0123456789") + str(f_count)
         file = f_name + f_ext
     return file
     
@@ -219,8 +219,14 @@ class NX_part:
     def Update(self):
         # # Update model ###
         markId6 = self.session.SetUndoMark(NXOpen.Session.MarkVisibility.Invisible, "NX update")
-           
-        nErrs1 = self.session.UpdateManager.DoUpdate(markId6)
+        logging.debug("Attempting to update")   
+        try:
+            nErrs1 = self.session.UpdateManager.DoUpdate(markId6)
+            logging.debug("Update successful")
+            return True
+        except:
+            logging.error("Failed to update...")
+            return False
         
     def Close(self):
         self.workPart.Close(NXOpen.BasePart.CloseWholeTree.TrueValue, NXOpen.BasePart.CloseModified.UseResponses, None)
@@ -256,6 +262,7 @@ def main():
     # open WS
     ws = wb[excel_sheet_name]
     maxDS = ws.max_row - 1
+    
     InputRange = "A1:{0}{1}".format(openpyxl.utils.get_column_letter(ws.max_column), ws.max_row)
     
     logging.info("found {0} design cases in {1}".format(maxDS, InputRange))
@@ -264,7 +271,7 @@ def main():
     # parameter = [ {[p1_Name:p1DC1_value]; [p2_Name:p1DC2_value]; ... 
     #                        {[p1_Name:p1DC2_value]; ...} 
     #                      ]
-    parameters = [{n:v for (n,v) in zip((c1.value for c1 in ws[1]), (cn.value for cn in ws[n]))} for n in range(2, ws.max_row)]
+    parameters = [{n:v for (n,v) in zip((c1.value for c1 in ws[1]), (cn.value for cn in ws[n]))} for n in range(2, ws.max_row+1)]
     
     for p in parameters:
         logging.debug("{0} /n".format(p))
@@ -282,6 +289,7 @@ def main():
     for p in parameters:
         try:
             DC = p[design_case_indicator_column]
+            logging.debug("\n**************** DC {0} **********************".format(DC))
         except:
             logging.error('no designcase found! skipping...')
             continue
@@ -293,7 +301,11 @@ def main():
         for name, value in p.items():
             nxPart.ChangeParameter(name, value, True)
         
-        nxPart.Update()
+        logging.debug("All parameters set!")
+        
+        if not nxPart.Update():
+            nxPart.Close()
+            continue
         # # Save CAD
         final_name_DC = "{0}{1}".format(final_name, DC)
         final_fullpath = os.path.join(final_path, final_name_DC)
